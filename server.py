@@ -29,6 +29,11 @@ def background_radar_worker():
         except Exception as e:
             print(f"[Radar Worker] Scheduled scan error: {e}")
 
+@app.route("/favicon.ico")
+def favicon():
+    svg_icon = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="45" fill="#FAF8F5" stroke="#D97706" stroke-width="8"/><circle cx="50" cy="50" r="28" fill="none" stroke="#D97706" stroke-width="4" stroke-dasharray="6 6"/><circle cx="50" cy="50" r="8" fill="#15803D"/></svg>"""
+    return svg_icon, 200, {"Content-Type": "image/svg+xml"}
+
 @app.route("/")
 def index():
     db.init_db()
