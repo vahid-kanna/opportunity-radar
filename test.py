@@ -6,6 +6,15 @@ from server import app
 
 class TestOpportunityRadar(unittest.TestCase):
     def setUp(self):
+        import os
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+        temp = tempfile.TemporaryDirectory(dir=os.environ.get('TMPDIR'))
+        self.addCleanup(temp.cleanup)
+        override = patch.object(db, 'DB_FILE', str(Path(temp.name) / 'routes.db'))
+        override.start()
+        self.addCleanup(override.stop)
         db.init_db()
         self.client = app.test_client()
 
@@ -19,7 +28,8 @@ class TestOpportunityRadar(unittest.TestCase):
         res = self.client.get("/")
         self.assertEqual(res.status_code, 200)
         self.assertIn(b"Opportunity Radar", res.data)
-        self.assertIn(b"GLOBAL REMOTE USD", res.data)
+        self.assertIn(b"opportunities-data", res.data)
+        self.assertNotIn(b"24/7 SCANNER ACTIVE", res.data)
 
     def test_api_opportunities(self):
         res = self.client.get("/api/opportunities")

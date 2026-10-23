@@ -8,9 +8,19 @@ import db
 import scanner
 
 app = Flask(__name__)
+_manual_guard = threading.Lock()
+_last_manual_scan = 0.0
+
+@app.after_request
+def security_headers(response):
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+    response.headers['X-Frame-Options'] = 'DENY'
+    response.headers['Cache-Control'] = 'no-store'
+    return response
 
 # Configurable scan interval (in seconds): 10 minutes = 600s
-SCAN_INTERVAL_SECONDS = 600
+SCAN_INTERVAL_SECONDS = max(600, int(os.environ.get('SCAN_INTERVAL_SECONDS', '3600')))
 
 def background_radar_worker():
     """Autonomous 24/7 scanning worker running every 10 minutes."""
@@ -42,7 +52,7 @@ def index():
     total_count = len(opps)
     usd_count = sum(1 for o in opps if o['type'] == 'remote_usd')
     nat_count = sum(1 for o in opps if o['type'] == 'national_campus')
-    q1_count = sum(1 for o in opps if o.get('quadrant', '').startswith('Q1'))
+    q1_count = 0  # Legacy priority labels are not evidence-backed.
     
     return render_template(
         "index.html",
@@ -50,22 +60,33 @@ def index():
         total_count=total_count,
         usd_count=usd_count,
         nat_count=nat_count,
-        q1_count=q1_count
+        q1_count=0, scanner_health=db.get_scanner_health(), scan_enabled=False
     )
 
 @app.route("/api/opportunities")
 def get_opportunities():
+    db.init_db()
     opps = db.get_all_active_opportunities()
     return jsonify(opps)
 
 @app.route("/api/scan", methods=["POST"])
 def manual_scan():
+    global _last_manual_scan
+    import hmac
+    token = os.environ.get('RADAR_SCAN_TOKEN', '')
+    if not token or not hmac.compare_digest(request.headers.get('Authorization', ''), 'Bearer ' + token):
+        return jsonify(error='Operator authentication required'), 401
+    with _manual_guard:
+        if time.monotonic() - _last_manual_scan < 60:
+            return jsonify(error='Scan rate limited; retry after 60 seconds'), 429
+        _last_manual_scan = time.monotonic()
     result = scanner.run_full_scan()
-    return jsonify({"status": "success", "result": result})
+    return jsonify(result), 409 if result.get('status') == 'busy' else 200
 
 @app.route("/health")
 def health():
-    return jsonify({"status": "healthy", "service": "opportunity-radar", "timestamp": datetime.now().isoformat()})
+    db.init_db()
+    return jsonify(status='healthy', version='2.0', service='opportunity-radar', sources=db.get_scanner_health(), timestamp=datetime.now().isoformat())
 
 if __name__ == "__main__":
     db.init_db()
