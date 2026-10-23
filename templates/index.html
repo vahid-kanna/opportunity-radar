@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Opportunity Radar | Shaik Vahid Basha</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-canvas: #FAF8F5;
+            --bg-card: #FFFFFF;
+            --bg-subtle: #F4EFEB;
+            --border-subtle: #E8E2D9;
+            --border-strong: #D5CEBE;
+            --text-title: #1C1917;
+            --text-body: #44403C;
+            --text-muted: #78716C;
+            --text-faint: #A8A29E;
+            --terracotta: #D97706;
+            --terracotta-soft: #FEF3C7;
+            --accent-green: #15803D;
+            --accent-green-soft: #DCFCE7;
+            --accent-blue: #1D4ED8;
+            --accent-blue-soft: #DBEAFE;
+            --accent-purple: #6D28D9;
+            --accent-purple-soft: #EDE9FE;
+            --radius-sm: 6px;
+            --radius-md: 10px;
+            --radius-lg: 16px;
+            --shadow-subtle: 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02);
+            --shadow-card: 0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -2px rgba(0,0,0,0.03);
+            --shadow-hover: 0 10px 15px -3px rgba(0,0,0,0.07), 0 4px 6px -4px rgba(0,0,0,0.04);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-canvas);
+            color: var(--text-body);
+            font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+            -webkit-font-smoothing: antialiased;
+            line-height: 1.5;
+            padding: 24px 16px 80px 16px;
+        }
+
+        .container {
+            max-width: 1080px;
+            margin: 0 auto;
+        }
+
+        /* Top Header */
+        header {
+            margin-bottom: 28px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid var(--border-subtle);
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        @media (min-width: 768px) {
+            header {
+                flex-direction: row;
+                justify-content: space-between;
+                align-items: flex-end;
+            }
+        }
+
+        .brand-title {
+            font-family: 'Newsreader', Georgia, serif;
+            font-size: 2.1rem;
+            font-weight: 500;
+            color: var(--text-title);
+            letter-spacing: -0.02em;
+        }
+
+        .brand-sub {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        .header-meta {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+
+        .live-pulse {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            background: var(--accent-green-soft);
+            color: var(--accent-green);
+            font-weight: 600;
+            font-size: 0.75rem;
+            border-radius: 999px;
+            letter-spacing: 0.02em;
+            text-transform: uppercase;
+        }
+
+        .pulse-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background-color: var(--accent-green);
+            animation: pulse 2s infinite ease-in-out;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 0.4; transform: scale(0.9); }
+            50% { opacity: 1; transform: scale(1.2); }
+            100% { opacity: 0.4; transform: scale(0.9); }
+        }
+
+        .btn-refresh {
+            background: var(--bg-card);
+            border: 1px solid var(--border-strong);
+            color: var(--text-body);
+            padding: 6px 14px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            transition: all 0.15s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn-refresh:hover {
+            background: var(--bg-subtle);
+            border-color: var(--text-muted);
+        }
+
+        /* Overview Stats */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+
+        @media (min-width: 640px) {
+            .stats-grid {
+                grid-template-columns: repeat(4, 1fr);
+            }
+        }
+
+        .stat-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-md);
+            padding: 14px 16px;
+            box-shadow: var(--shadow-subtle);
+        }
+
+        .stat-card .label {
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            color: var(--text-muted);
+        }
+
+        .stat-card .value {
+            font-family: 'Newsreader', Georgia, serif;
+            font-size: 1.8rem;
+            font-weight: 500;
+            color: var(--text-title);
+            margin-top: 2px;
+        }
+
+        /* Filter Controls */
+        .controls-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-md);
+            padding: 16px;
+            margin-bottom: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            box-shadow: var(--shadow-subtle);
+        }
+
+        .search-box {
+            position: relative;
+            width: 100%;
+        }
+
+        .search-box input {
+            width: 100%;
+            padding: 10px 14px;
+            background: var(--bg-canvas);
+            border: 1px solid var(--border-strong);
+            border-radius: var(--radius-sm);
+            font-size: 0.9rem;
+            color: var(--text-title);
+            outline: none;
+            transition: border-color 0.15s ease;
+        }
+
+        .search-box input:focus {
+            border-color: var(--terracotta);
+            background: #FFF;
+        }
+
+        .filter-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .filter-pill {
+            padding: 6px 14px;
+            border-radius: 999px;
+            font-size: 0.8rem;
+            font-weight: 500;
+            background: var(--bg-subtle);
+            color: var(--text-body);
+            border: 1px solid transparent;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            user-select: none;
+        }
+
+        .filter-pill:hover {
+            background: var(--border-subtle);
+        }
+
+        .filter-pill.active {
+            background: var(--text-title);
+            color: #FFF;
+        }
+
+        /* Opportunity Cards */
+        .cards-list {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .opp-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-lg);
+            padding: 20px;
+            box-shadow: var(--shadow-card);
+            transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .opp-card:hover {
+            border-color: var(--border-strong);
+            box-shadow: var(--shadow-hover);
+        }
+
+        .card-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 12px;
+        }
+
+        .badge-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            align-items: center;
+        }
+
+        .badge {
+            font-size: 0.72rem;
+            font-weight: 600;
+            padding: 3px 8px;
+            border-radius: 4px;
+            letter-spacing: 0.02em;
+        }
+
+        .badge-type-usd {
+            background: var(--accent-green-soft);
+            color: var(--accent-green);
+        }
+
+        .badge-type-campus {
+            background: var(--accent-blue-soft);
+            color: var(--accent-blue);
+        }
+
+        .badge-track {
+            background: var(--bg-subtle);
+            color: var(--text-body);
+            border: 1px solid var(--border-subtle);
+        }
+
+        .badge-deadline {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+            color: var(--terracotta);
+            font-weight: 600;
+        }
+
+        .opp-title {
+            font-size: 1.15rem;
+            font-weight: 600;
+            color: var(--text-title);
+            line-height: 1.35;
+        }
+
+        .opp-org {
+            font-size: 0.9rem;
+            font-weight: 500;
+            color: var(--text-muted);
+        }
+
+        .compensation-banner {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 12px;
+            background: var(--bg-subtle);
+            padding: 10px 14px;
+            border-radius: var(--radius-md);
+            font-size: 0.88rem;
+        }
+
+        .comp-usd {
+            font-weight: 700;
+            color: var(--accent-green);
+        }
+
+        .comp-inr {
+            font-weight: 600;
+            color: var(--text-title);
+        }
+
+        .opp-meta {
+            font-size: 0.82rem;
+            color: var(--text-muted);
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .opp-meta span strong {
+            color: var(--text-body);
+        }
+
+        .card-actions {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-top: 4px;
+            padding-top: 12px;
+            border-top: 1px solid var(--bg-subtle);
+        }
+
+        .btn-apply {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--text-title);
+            color: #FFFFFF;
+            text-decoration: none;
+            font-size: 0.85rem;
+            font-weight: 600;
+            padding: 8px 18px;
+            border-radius: var(--radius-sm);
+            transition: background 0.15s ease;
+        }
+
+        .btn-apply:hover {
+            background: #000000;
+        }
+
+        .source-pill {
+            font-size: 0.75rem;
+            color: var(--text-faint);
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* Empty state */
+        .empty-state {
+            text-align: center;
+            padding: 48px 16px;
+            color: var(--text-muted);
+            font-size: 0.95rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Top Header -->
+        <header>
+            <div>
+                <h1 class="brand-title">Opportunity Radar</h1>
+                <p class="brand-sub">Unified Intelligence for Global Remote USD & National Flagship Roles</p>
+            </div>
+            <div class="header-meta">
+                <span class="live-pulse"><span class="pulse-dot"></span> 24/7 Scanner Active</span>
+                <button class="btn-refresh" onclick="triggerManualScan()">&#8635; Scan Now</button>
+            </div>
+        </header>
+
+        <!-- Stats Overview -->
+        <section class="stats-grid">
+            <div class="stat-card">
+                <div class="label">Total Verified Active</div>
+                <div class="value" id="stat-total">{{ total_count }}</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Remote USD Roles</div>
+                <div class="value" id="stat-usd" style="color: var(--accent-green);">{{ usd_count }}</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">National & Grants</div>
+                <div class="value" id="stat-nat" style="color: var(--accent-blue);">{{ nat_count }}</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">High Priority (Q1)</div>
+                <div class="value" id="stat-q1" style="color: var(--terracotta);">{{ q1_count }}</div>
+            </div>
+        </section>
+
+        <!-- Filters & Search -->
+        <section class="controls-card">
+            <div class="search-box">
+                <input type="text" id="searchInput" placeholder="Search by role, company, track, or keywords (e.g. APM, DuckDuckGo, Python, Grant)..." oninput="filterCards()">
+            </div>
+            <div class="filter-row">
+                <span style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-right: 4px;">VIEW:</span>
+                <div class="filter-pill active" data-type="all" onclick="setTypeFilter('all', this)">All Opportunities</div>
+                <div class="filter-pill" data-type="remote_usd" onclick="setTypeFilter('remote_usd', this)">💵 Remote USD</div>
+                <div class="filter-pill" data-type="national_campus" onclick="setTypeFilter('national_campus', this)">🏛️ National & Campus</div>
+            </div>
+            <div class="filter-row">
+                <span style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-right: 4px;">TRACK:</span>
+                <div class="filter-pill active" data-track="all" onclick="setTrackFilter('all', this)">All Tracks</div>
+                <div class="filter-pill" data-track="Product Management" onclick="setTrackFilter('Product Management', this)">APM / Product</div>
+                <div class="filter-pill" data-track="Applied AI & LLMs" onclick="setTrackFilter('Applied AI & LLMs', this)">Applied AI</div>
+                <div class="filter-pill" data-track="Data & Analytics" onclick="setTrackFilter('Data & Analytics', this)">Analytics</div>
+                <div class="filter-pill" data-track="Engineering & Python" onclick="setTrackFilter('Engineering & Python', this)">Engineering</div>
+                <div class="filter-pill" data-track="Startup Grant / SyncPro" onclick="setTrackFilter('Startup Grant / SyncPro', this)">Grants & Pilots</div>
+            </div>
+        </section>
+
+        <!-- Opportunity Cards Container -->
+        <main class="cards-list" id="cardsContainer">
+            {% for opp in opportunities %}
+            <article class="opp-card" 
+                     data-id="{{ opp.id }}"
+                     data-type="{{ opp.type }}" 
+                     data-track="{{ opp.track }}"
+                     data-text="{{ opp.title }} {{ opp.organization }} {{ opp.track }} {{ opp.location }} {{ opp.matched_on }}">
+                <div class="card-top">
+                    <div class="badge-group">
+                        {% if opp.type == 'remote_usd' %}
+                        <span class="badge badge-type-usd">GLOBAL REMOTE USD</span>
+                        {% else %}
+                        <span class="badge badge-type-campus">NATIONAL / CAMPUS</span>
+                        {% endif %}
+                        <span class="badge badge-track">{{ opp.track }}</span>
+                    </div>
+                    <span class="badge-deadline">⏱️ {{ opp.days_left_str }}</span>
+                </div>
+
+                <div>
+                    <h2 class="opp-title">{{ opp.title }}</h2>
+                    <div class="opp-org">{{ opp.organization }} &bull; <span style="color: var(--text-muted); font-size: 0.85rem;">{{ opp.location }}</span></div>
+                </div>
+
+                {% if opp.compensation_usd or opp.compensation_inr %}
+                <div class="compensation-banner">
+                    {% if opp.compensation_usd %}
+                    <span class="comp-usd">{{ opp.compensation_usd }}</span>
+                    {% endif %}
+                    {% if opp.compensation_inr %}
+                    <span class="comp-inr">🇮🇳 {{ opp.compensation_inr }}</span>
+                    {% endif %}
+                </div>
+                {% endif %}
+
+                <div class="opp-meta">
+                    {% if opp.eligibility %}
+                    <span><strong>Eligibility:</strong> {{ opp.eligibility }}</span>
+                    {% endif %}
+                    {% if opp.matched_on %}
+                    <span><strong>Criteria:</strong> {{ opp.matched_on }}</span>
+                    {% endif %}
+                </div>
+
+                <div class="card-actions">
+                    <span class="source-pill">Source: {{ opp.source }}</span>
+                    <a href="{{ opp.action_url }}" target="_blank" rel="noopener noreferrer" class="btn-apply">View & Apply &rarr;</a>
+                </div>
+            </article>
+            {% endfor %}
+        </main>
+        
+        <div id="emptyMessage" class="empty-state" style="display: none;">
+            No opportunities match your selected filters or search query.
+        </div>
+    </div>
+
+    <script>
+        let currentType = 'all';
+        let currentTrack = 'all';
+
+        function setTypeFilter(type, element) {
+            document.querySelectorAll('[data-type]').forEach(el => el.classList.remove('active'));
+            element.classList.add('active');
+            currentType = type;
+            filterCards();
+        }
+
+        function setTrackFilter(track, element) {
+            document.querySelectorAll('[data-track]').forEach(el => el.classList.remove('active'));
+            element.classList.add('active');
+            currentTrack = track;
+            filterCards();
+        }
+
+        function filterCards() {
+            const search = document.getElementById('searchInput').value.toLowerCase().trim();
+            const cards = document.querySelectorAll('.opp-card');
+            let visibleCount = 0;
+
+            cards.forEach(card => {
+                const type = card.getAttribute('data-type');
+                const track = card.getAttribute('data-track');
+                const text = card.getAttribute('data-text').toLowerCase();
+
+                const matchesType = (currentType === 'all' || type === currentType);
+                const matchesTrack = (currentTrack === 'all' || track.toLowerCase().includes(currentTrack.toLowerCase()));
+                const matchesSearch = (!search || text.includes(search));
+
+                if (matchesType && matchesTrack && matchesSearch) {
+                    card.style.display = 'flex';
+                    visibleCount++;
+                } else {
+                    card.style.display = 'none';
+                }
+            });
+
+            document.getElementById('emptyMessage').style.display = visibleCount === 0 ? 'block' : 'none';
+        }
+
+        async function triggerManualScan() {
+            const btn = document.querySelector('.btn-refresh');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '&#8987; Scanning...';
+            btn.style.opacity = '0.7';
+            btn.disabled = true;
+
+            try {
+                const res = await fetch('/api/scan', { method: 'POST' });
+                if (res.ok) {
+                    window.location.reload();
+                } else {
+                    alert('Scan failed. Please check server logs.');
+                }
+            } catch (err) {
+                console.error(err);
+                alert('Network error while requesting scan.');
+            } finally {
+                btn.innerHTML = originalText;
+                btn.style.opacity = '1';
+                btn.disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>
