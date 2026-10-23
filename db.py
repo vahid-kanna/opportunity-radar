@@ -52,7 +52,19 @@ def seed_existing_data():
     conn = get_connection()
     cur = conn.cursor()
     
-    # 1. Seed from national opps.db if present
+    # 1. Seed from seed_data.json if present
+    seed_json = os.path.join(os.path.dirname(__file__), "seed_data.json")
+    if os.path.exists(seed_json):
+        try:
+            with open(seed_json, 'r', encoding='utf-8') as f:
+                items = json.load(f)
+                for item in items:
+                    upsert_opportunity(item)
+            return
+        except Exception as e:
+            print(f"[Seed] Error loading seed_data.json: {e}")
+
+    # 2. Seed from national opps.db if present
     local_opps_db = r"C:\Users\vahid\AI_Brain\career\opportunities\opps.db"
     if os.path.exists(local_opps_db):
         try:
