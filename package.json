@@ -1,0 +1,9 @@
+{
+  "name": "opportunity-radar",
+  "version": "1.0.0",
+  "description": "24/7 Autonomous Opportunity Radar Web Application",
+  "main": "main.py",
+  "scripts": {
+    "start": "python3 main.py || python main.py"
+  }
+}
