@@ -4,6 +4,7 @@ import json
 import os
 import sqlite3
 import time
+from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
 from contextlib import contextmanager
 from pathlib import Path
 import quality
@@ -48,6 +49,8 @@ def init_db():
             id INTEGER PRIMARY KEY, source TEXT, status TEXT, count INTEGER, error TEXT, attempted_at TEXT)''')
         c.execute('''CREATE TABLE IF NOT EXISTS scan_leases (
             name TEXT PRIMARY KEY, owner TEXT NOT NULL, expires_at REAL NOT NULL)''')
+        c.execute('CREATE INDEX IF NOT EXISTS scan_runs_source_id ON scan_runs(source,id)')
+        c.execute('CREATE INDEX IF NOT EXISTS scan_runs_success ON scan_runs(status,source,attempted_at)')
         c.execute('CREATE TABLE IF NOT EXISTS metadata (key TEXT PRIMARY KEY, value TEXT)')
         c.execute('PRAGMA user_version=2')
         seeded = c.execute("SELECT value FROM metadata WHERE key='seeded'").fetchone()
@@ -70,6 +73,9 @@ def upsert_opportunity(opp, imported=False):
     if not all(opp.get(k) for k in ('id', 'title', 'organization')):
         raise ValueError('Missing identity, title or organization')
     payload = json.dumps(opp, ensure_ascii=False, sort_keys=True)
+    # Fetch timestamps are provenance, not a material content change.
+    stable = {k: v for k, v in opp.items() if k not in ('fetched_at', 'last_seen_at', 'discovered_at')}
+    digest = hashlib.sha256(json.dumps(stable, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
     with connection() as c:
         c.execute('''INSERT INTO opportunities
             (id,type,title,organization,track,action_url,source,location,payload,last_seen_at,content_hash,last_verified_at)
@@ -80,7 +86,7 @@ def upsert_opportunity(opp, imported=False):
             last_seen_at=excluded.last_seen_at,content_hash=excluded.content_hash,last_verified_at=NULL''',
             (opp['id'],opp.get('type'),opp['title'],opp['organization'],opp.get('track'),opp.get('action_url') or '',
              opp.get('source'),opp.get('location'),payload,None if imported else quality.utcnow(),
-             hashlib.sha256(payload.encode()).hexdigest()))
+             digest))
 
 def get_all_active_opportunities():
     with connection() as c:
@@ -102,7 +108,35 @@ def get_all_active_opportunities():
         raw['last_seen_at']=row.get('last_seen_at')
         raw['discovered_at']=row['discovered_at']
         result.append(quality.normalize(raw))
-    return sorted(result,key=lambda r:(-r['fit_score'],r['title'].casefold()))
+    return sorted(deduplicate_public(result),key=lambda r:(-r['fit_score'],r['title'].casefold()))
+
+
+def canonical_listing_url(value):
+    """Exact destination identity only; never merge different roles by similar titles."""
+    value = quality.safe_url(value)
+    if not value:
+        return ''
+    p = urlsplit(value)
+    query = [(k, v) for k, v in parse_qsl(p.query, keep_blank_values=True)
+             if not k.lower().startswith('utm_') and k.lower() not in ('fbclid', 'gclid')]
+    return urlunsplit((p.scheme.lower(), p.netloc.lower(), p.path.rstrip('/') or '/', urlencode(sorted(query)), ''))
+
+
+def deduplicate_public(records):
+    groups = {}
+    for record in records:
+        url = canonical_listing_url(record.get('apply_url') or record.get('source_url'))
+        key = (url, str(record.get('title') or '').casefold().strip(), str(record.get('organization') or '').casefold().strip()) if url else ('id', record['id'])
+        groups.setdefault(key, []).append(record)
+    output = []
+    for members in groups.values():
+        # Keep reviewed identity/action state; otherwise prefer the first durable ID.
+        members.sort(key=lambda r: (r.get('verification_state') != 'verified', str(r.get('discovered_at') or ''), str(r['id'])))
+        chosen = dict(members[0])
+        chosen['sources'] = sorted({str(r.get('source') or '') for r in members} - {''})
+        chosen['duplicate_count'] = len(members) - 1
+        output.append(chosen)
+    return output
 
 def acquire_scan_lease(owner, lease_seconds=600):
     """Atomically acquire the singleton lease; stale owners cannot release successors."""
@@ -133,6 +167,12 @@ def get_scanner_health():
         rows=[dict(r) for r in c.execute('SELECT * FROM scan_runs s WHERE id=(SELECT MAX(id) FROM scan_runs WHERE source=s.source)')]
         successes={r['source']:r['at'] for r in c.execute("SELECT source,MAX(attempted_at) AS at FROM scan_runs WHERE status='success' GROUP BY source")}
     result={r['source']:dict(source=r['source'],status=r['status'],count=r['count'],error=r['error'],last_attempt=r['attempted_at'],last_success=successes.get(r['source'])) for r in rows}
-    for name in ('RemoteOK','Jobicy','Unstop'):
+    import ats
+    names = ['RemoteOK','Jobicy','Unstop']
+    try:
+        names.extend(ats.source_name(board) for board in ats.configured_boards())
+    except (ValueError, OSError) as exc:
+        result['Employer configuration'] = dict(source='Employer configuration',status='error',count=0,error=str(exc)[:200],last_attempt=None,last_success=None)
+    for name in names:
         result.setdefault(name,dict(source=name,status='not_run',count=0,error=None,last_attempt=None,last_success=None))
     return list(result.values())

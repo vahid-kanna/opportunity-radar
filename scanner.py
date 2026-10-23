@@ -10,7 +10,17 @@ from datetime import datetime, timedelta, timezone
 from html import unescape
 from html.parser import HTMLParser
 import uuid
+import time
+import ats
+import feedclient
 import storage as db
+
+def configured_adapters():
+    adapters = [('RemoteOK', fetch_remoteok), ('Jobicy', fetch_jobicy), ('Unstop', fetch_unstop_opportunities)]
+    for board in ats.configured_boards():
+        adapters.append((ats.source_name(board), lambda board=board: ats.fetch_board(board, _fetch_json)))
+    return adapters
+
 
 HEADERS = {'User-Agent': 'OpportunityRadar/1.0', 'Accept': 'application/json'}
 CTX = ssl.create_default_context()
@@ -20,6 +30,8 @@ KEYWORDS = {
     'Product Management': ['product manager', 'associate product manager', 'apm', 'product lead', 'technical product', 'product operations'],
     'Applied AI & LLMs': ['applied ai', 'ai engineer', 'ai coding', 'prompt engineer', 'llm', 'machine learning', 'data annotation', 'ai evaluation'],
     'Data & Analytics': ['risk analyst', 'data analyst', 'business analyst', 'analytics', 'growth analyst', 'operations analyst'],
+    'Core Civil & Infrastructure': ['civil engineer', 'construction engineer', 'structural engineer', 'site engineer', 'quantity surveyor', 'planning engineer', 'project controls', 'construction management', 'bim engineer', 'bim modeler'],
+    'Consulting & Strategy': ['consulting analyst', 'strategy analyst', 'business consultant', 'management consultant', 'strategy associate'],
     'Engineering & Python': ['python developer', 'full stack', 'full-stack', 'backend engineer', 'software engineer', 'automation engineer'],
 }
 COMPETITION_KEYWORDS = {
@@ -44,12 +56,7 @@ def _text(value):
     return ' '.join(unescape(' '.join(parser.parts)).split())
 
 def _fetch_json(url):
-    req = urllib.request.Request(url, headers=HEADERS)
-    with urllib.request.urlopen(req, timeout=15, context=CTX) as response:
-        payload = response.read(MAX_RESPONSE_BYTES + 1)
-    if len(payload) > MAX_RESPONSE_BYTES:
-        raise ValueError('Feed exceeds response size limit')
-    return json.loads(payload.decode('utf-8'))
+    return feedclient.fetch_json(url)
 
 def _valid_url(value):
     if not isinstance(value, str):
@@ -222,25 +229,36 @@ def fetch_unstop_opportunities():
 def run_full_scan():
     if not SCAN_LOCK.acquire(blocking=False):
         return dict(status='busy', counts={}, remote_count=0, national_count=0)
-    counts, errors = {}, {}
+    counts, errors, succeeded = {}, {}, 0
     owner, leased = uuid.uuid4().hex, False
     try:
         db.init_db()
-        # Three bounded feed requests (15s each); ten minutes permits DB/parse overhead.
+        # At most eight adapters; stop launching requests before the ten-minute lease expires.
+        adapters = configured_adapters()
+        scan_deadline = time.monotonic() + 480
         leased = db.acquire_scan_lease(owner, lease_seconds=600)
         if not leased:
             return dict(status='busy', counts={}, remote_count=0, national_count=0)
-        for source, adapter in [('RemoteOK', fetch_remoteok), ('Jobicy', fetch_jobicy), ('Unstop', fetch_unstop_opportunities)]:
+        for source, adapter in adapters:
             count = 0
             try:
+                if time.monotonic() >= scan_deadline:
+                    raise TimeoutError('Scan time budget exhausted')
+                rejected = 0
                 for opportunity in adapter():
+                    if not isinstance(opportunity, dict) or not all(isinstance(opportunity.get(k), str) and opportunity[k].strip() for k in ('id', 'title', 'organization')):
+                        rejected += 1
+                        continue
                     db.upsert_opportunity(opportunity)
                     count += 1
+                succeeded += 1
+                if rejected:
+                    errors[source] = f'Rejected {rejected} malformed record(s); retained {count} valid record(s)'
             except Exception as exc:
                 errors[source] = f'{type(exc).__name__}: {exc}'
             counts[source] = count
-            db.record_scan(source, 'error' if source in errors else 'success', count, errors.get(source))
-        status = 'complete' if not errors else ('error' if len(errors) == 3 else 'partial')
+            db.record_scan(source, ('partial' if count else 'error') if source in errors else 'success', count, errors.get(source))
+        status = 'complete' if not errors else ('error' if not succeeded else 'partial')
         return dict(status=status, counts=counts, errors=errors,
                     last_scanned=datetime.now(timezone.utc).isoformat(),
                     total_active=len(db.get_all_active_opportunities()),

@@ -22,9 +22,11 @@
   const link = (value,label,cls) => { const url = safeURL(value); if (!url) return null; const a = node('a',label,cls); a.href = url.href; a.target = '_blank'; a.rel = 'noopener noreferrer'; return a; };
   const queueOf = o => Object.hasOwn(queues,o.queue) && o.queue !== 'all' ? o.queue : 'review';
   const isFunding = o => o.track_group === 'funding' || ['grant','pilot','accelerator','funding','investment'].includes(text(o.kind).toLowerCase());
-  function matches(o) {
+  const pay = o => [...new Set([o.compensation,o.compensation_usd,o.compensation_inr].map(text).filter(v => v.trim()))].join(' · ') || 'Not disclosed';
+  let visibleItems = [];
+  function matches(o, includeHidden = false) {
     const action = actionsFor(o);
-    const localMatch = state.local === 'all' || (state.local === 'visible' ? !action.hidden : state.local === 'hidden' ? !!action.hidden : !action.hidden && !!action[state.local]);
+    const localMatch = state.local === 'all' || (state.local === 'visible' ? includeHidden || !action.hidden : state.local === 'hidden' ? !!action.hidden : !action.hidden && !!action[state.local]);
     const haystack = ['title','organization','track','track_group','kind','location','fit_reason','source'].map(k => text(o[k])).join(' ').toLowerCase();
     return localMatch && (!state.search || haystack.includes(state.search.trim().toLowerCase())) &&
       (state.track === 'all' || (state.track === 'funding' ? isFunding(o) : o.track_group === state.track)) &&
@@ -56,8 +58,7 @@
     const eligibility = text(o.eligibility_state) || 'unknown'; const availability = text(o.availability_state) || 'unknown'; const verification = text(o.verification_state) || 'unverified';
     for (const [label,value,good] of [['Eligibility',eligibility,eligibility === 'eligible'],['Availability',availability,availability === 'open'],['Evidence',verification,verification === 'verified']]) badges.append(node('span',`${label}: ${value}`,`badge ${good ? 'badge-good' : 'badge-caution'}`));
     card.append(badges,node('p',text(o.fit_reason) || 'Fit is not established. Check the eligibility and source evidence.','reason'));
-    const compensation = [...new Set([o.compensation,o.compensation_usd,o.compensation_inr].map(text).filter(Boolean))];
-    if (compensation.length) card.append(node('p',compensation.join(' · '),'facts'));
+    card.append(node('p',`Pay / funding: ${pay(o)}`,'facts'));
     card.append(node('p',timestamp(o.deadline_at) !== null ? `Deadline: ${date(o.deadline_at)}` : 'Deadline not confirmed','facts'));
     const actions = node('div','','actions');
     const destination = safeURL(o.apply_url) || safeURL(o.source_url);
@@ -80,7 +81,7 @@
     card.append(details); return card;
   }
   function render() {
-    const filtered = items.filter(matches);
+    const filtered = items.filter(o => matches(o));
     for (const [q,label] of Object.entries(queues)) { const b = $(`queue-${q}`); b.textContent = `${label} ${q === 'all' ? filtered.length : filtered.filter(o => queueOf(o) === q).length}`; b.setAttribute('aria-pressed',String(q === state.queue)); }
     const visible = filtered.filter(o => state.queue === 'all' || queueOf(o) === state.queue);
     visible.sort((a,b) => {
@@ -88,7 +89,16 @@
       if (state.sort === 'newest') return (timestamp(b.last_seen_at) ?? 0) - (timestamp(a.last_seen_at) ?? 0) || text(a.title).localeCompare(text(b.title));
       return (Number(b.fit_score) || 0) - (Number(a.fit_score) || 0) || (timestamp(a.deadline_at) ?? Infinity) - (timestamp(b.deadline_at) ?? Infinity) || text(a.title).localeCompare(text(b.title));
     });
+    visibleItems = visible;
+    $('download-csv').disabled = visible.length === 0;
     $('results').replaceChildren(...visible.map(makeCard)); $('empty').hidden = visible.length > 0;
+    const inQueue = o => state.queue === 'all' || queueOf(o) === state.queue;
+    const hiddenMatches = state.local === 'visible' ? items.filter(o => inQueue(o) && actionsFor(o).hidden && matches(o,true)).length : 0;
+    const hasBest = items.some(o => queueOf(o) === 'best');
+    $('empty').textContent = !items.length ? 'No opportunities are loaded. Source health below the page title can show whether discovery has run.' :
+      hiddenMatches ? `${hiddenMatches} matching ${hiddenMatches === 1 ? 'opportunity is' : 'opportunities are'} hidden on this device. Choose Include hidden in Filters to restore them.` :
+      state.queue === 'best' && !hasBest ? 'No verified best matches yet. Needs verification contains leads that still need eligibility, availability or evidence checks; it does not mean there are no leads.' :
+      'No opportunities match these filters. Try All or clear filters.';
     $('result-count').textContent = `${visible.length} ${visible.length === 1 ? 'opportunity' : 'opportunities'} · ${queues[state.queue]}`;
     $('active-filters').textContent = ['search','track','eligibility','availability','local'].filter(k => state[k] !== defaults[k]).map(k => k === 'search' ? `Search: ${state[k]}` : $(k).selectedOptions[0].textContent).join(' · ');
   }
@@ -96,12 +106,48 @@
   for (const name of Object.keys(defaults).filter(n => n !== 'queue')) $(name).addEventListener(name === 'search' ? 'input' : 'change',() => { state[name] = $(name).value; updateURL(); render(); });
   $('clear').addEventListener('click',() => { Object.assign(state,defaults,{queue:'all'}); for (const name of Object.keys(defaults).filter(n => n !== 'queue')) $(name).value = state[name]; updateURL(); render(); });
   $('result-count').tabIndex = -1;
+  // Export only fields displayed by cards, never raw payloads, evidence or device actions.
+  const csvCell = value => {
+    let s = text(value);
+    if (/^[\s\uFEFF]*[=+\-@]/.test(s) || /^[\t\r\n]/.test(s)) s = `'${s}`;
+    return `"${s.replaceAll('"','""')}"`;
+  };
+  $('download-csv').addEventListener('click',() => {
+    const rows = [['Title','Organization','Location','Track','Kind','Queue','Eligibility','Availability','Evidence status','Pay / funding','Deadline','Fit reason','Destination']];
+    for (const o of visibleItems) rows.push([text(o.title) || 'Untitled opportunity',text(o.organization) || 'Organization not recorded',o.location,text(o.track) || text(o.track_group),o.kind,queues[queueOf(o)],text(o.eligibility_state) || 'unknown',text(o.availability_state) || 'unknown',text(o.verification_state) || 'unverified',pay(o),timestamp(o.deadline_at) !== null ? date(o.deadline_at) : 'Deadline not confirmed',text(o.fit_reason) || 'Fit is not established. Check the eligibility and source evidence.',(safeURL(o.apply_url) || safeURL(o.source_url))?.href || '']);
+    const blob = new Blob(['\uFEFF',rows.map(row => row.map(csvCell).join(',')).join('\r\n')],{type:'text/csv;charset=utf-8'});
+    const url = URL.createObjectURL(blob); const a = node('a'); a.href = url; a.download = 'opportunity-radar-visible.csv'; document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url),1000);
+    $('share-message').textContent = `Downloaded ${visibleItems.length} visible results. Evidence and device actions are not included.`;
+  });
+  $('copy-link').addEventListener('click',async () => {
+    updateURL(); const url = location.href;
+    $('share-fallback').hidden = true;
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error('Clipboard unavailable');
+      await navigator.clipboard.writeText(url);
+      $('share-message').textContent = 'Filtered link copied. Device-only actions are not shared.';
+    } catch {
+      $('share-fallback').hidden = false; $('share-url').value = url; $('share-url').focus(); $('share-url').select();
+      $('share-message').textContent = 'Clipboard unavailable. Copy the selected link below. Device-only actions are not shared.';
+    }
+  });
   window.addEventListener('popstate',() => { restoreURL(); render(); });
   const successes = health.map(s => timestamp(s.last_success)).filter(n => n !== null);
   const latest = successes.length ? Math.max(...successes) : null;
-  $('health-summary').textContent = `Source health · ${latest === null ? 'no successful scan recorded' : `last success ${date(new Date(latest).toISOString())}`} · ${health.length} sources`;
+  const now = Date.now(); const staleAfter = 24 * 60 * 60 * 1000;
+  const age = value => { const at = timestamp(value); if (at === null) return 'not recorded'; if (at > now + 60000) return 'future timestamp; check clock'; const minutes = Math.max(0,Math.floor((now-at)/60000)); return minutes < 60 ? `${minutes}m ago` : minutes < 1440 ? `${Math.floor(minutes/60)}h ago` : `${Math.floor(minutes/1440)}d ago`; };
+  const sourceState = s => {
+    const success = timestamp(s.last_success); const status = text(s.status).toLowerCase();
+    const failed = !!text(s.error) || !['success','ok','not_run','unknown',''].includes(status);
+    const stale = success !== null && now - success >= staleAfter;
+    const fresh = !failed && ['success','ok'].includes(status) && success !== null && now-success >= -60000 && !stale;
+    return {failed,stale,fresh,missing:success === null};
+  };
+  const states = health.map(sourceState); const count = field => states.filter(s => s[field]).length;
+  $('health-summary').textContent = `Source health · ${count('fresh')}/${health.length} fresh · ${count('failed')} failed · ${count('stale')} stale${count('missing') ? ` · ${count('missing')} never succeeded` : ''} · last success ${latest === null ? 'not recorded' : age(new Date(latest).toISOString())}`;
+  if (health.length) $('health-list').append(node('p','Fresh = successful last attempt and last success under 24h old. Stale = last success at least 24h ago. A failed attempt can also be stale. Ages are evaluated when the page loads.','health-note'));
   if (!health.length) $('health-list').append(node('p','No source telemetry is recorded. Scanner activity is not confirmed.'));
-  for (const s of health) { const row = node('div','','health-row'); row.append(node('strong',`${text(s.source) || 'Unnamed source'} · ${text(s.status) || 'unknown'}`),node('p',`Count: ${Number.isFinite(s.count) ? s.count : 'not recorded'} · Attempt: ${date(s.last_attempt)} · Success: ${date(s.last_success)}`)); if (text(s.error)) row.append(node('p',`Error: ${text(s.error)}`)); $('health-list').append(row); }
+  for (const s of health) { const status = sourceState(s); const row = node('div','',`health-row ${status.fresh ? 'health-good' : 'health-warning'}`); row.append(node('strong',`${text(s.source) || 'Unnamed source'} · ${text(s.status) || 'unknown'} · ${status.failed ? 'failed attempt' : status.fresh ? 'fresh' : 'not confirmed fresh'}${status.stale ? ' · stale' : ''}${status.missing ? ' · never succeeded' : ''}`),node('p',`Count: ${Number.isFinite(s.count) ? s.count : 'not recorded'} · Attempt: ${date(s.last_attempt)} (${age(s.last_attempt)}) · Success: ${date(s.last_success)} (${age(s.last_success)})`)); if (text(s.error)) row.append(node('p',`Error: ${text(s.error)}`)); $('health-list').append(row); }
   const scan = $('scan');
   if (scan) scan.addEventListener('click',async () => { scan.disabled = true; $('scan-message').textContent = 'Requesting scan…'; const controller = new AbortController(); const timeout = setTimeout(() => controller.abort(),120000); try { const response = await fetch('/api/scan',{method:'POST',credentials:'same-origin',signal:controller.signal,headers:{Accept:'application/json'}}); if (!response.ok) throw new Error(`Scan request failed (${response.status}).`); const data = await response.json(); $('scan-message').textContent = text(data.message) || 'Scan request accepted. Reload to inspect updated source health.'; } catch (err) { $('scan-message').textContent = err.name === 'AbortError' ? 'Scan request timed out. Check source health before retrying.' : text(err.message) || 'Scan could not be requested.'; } finally { clearTimeout(timeout); scan.disabled = false; } });
   restoreURL(); render();

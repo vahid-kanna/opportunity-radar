@@ -21,6 +21,8 @@
 <label>Device-only actions<select id="local"><option value="visible">Not hidden</option><option value="saved">Saved</option><option value="applied">Applied</option><option value="hidden">Hidden</option><option value="all">Include hidden</option></select></label>
 </div></details><button id="clear" type="button" class="quiet">Clear filters</button></section>
 <div class="result-bar"><p id="result-count" role="status" aria-live="polite"></p><span id="active-filters" class="muted"></span></div>
+<div class="result-tools" aria-label="Export and share"><button id="download-csv" type="button" class="quiet">Download CSV</button><button id="copy-link" type="button" class="quiet">Copy filtered link</button></div>
+<p id="share-message" class="muted" role="status"></p><label id="share-fallback" hidden>Filtered link · copy manually<input id="share-url" type="text" readonly></label>
 <main id="results" tabindex="-1" aria-label="Opportunities"></main><p id="empty" hidden>No opportunities match these filters. Try All or clear filters.</p>
 <noscript><p>Enable JavaScript to search opportunities and inspect evidence. No account or server-side application tracking is used.</p></noscript>
 <footer><p id="storage-note">Save, Applied and Hide are device-only: stored in this browser, not an account or a submitted application.</p></footer>

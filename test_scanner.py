@@ -9,9 +9,7 @@ import scanner
 
 class ScannerTests(unittest.TestCase):
     def feed(self, payload):
-        response = MagicMock()
-        response.__enter__.return_value.read.return_value = json.dumps(payload).encode()
-        return patch('scanner.urllib.request.urlopen', return_value=response)
+        return patch('scanner.feedclient.fetch_json', return_value=payload)
 
     def remote(self, **extra):
         return dict(id=1, position='Software Engineer', company='Example',
@@ -92,17 +90,15 @@ class ScannerTests(unittest.TestCase):
         self.assertTrue(scanner.CTX.check_hostname)
         with self.feed([]) as request:
             scanner.fetch_remoteok()
-        self.assertEqual(request.call_args.kwargs['timeout'], 15)
-        self.assertIs(request.call_args.kwargs['context'], scanner.CTX)
-        request.return_value.__enter__.return_value.read.assert_called_once_with(scanner.MAX_RESPONSE_BYTES + 1)
+        request.assert_called_once_with('https://remoteok.com/api')
+        self.assertEqual(scanner.feedclient.TIMEOUT, 15)
+        self.assertEqual(scanner.feedclient.MAX_RESPONSE_BYTES, scanner.MAX_RESPONSE_BYTES)
 
     def test_oversized_and_failed_network_raise(self):
-        response = MagicMock()
-        response.__enter__.return_value.read.return_value = b'x' * (scanner.MAX_RESPONSE_BYTES + 1)
-        with patch('scanner.urllib.request.urlopen', return_value=response), self.assertRaises(ValueError):
+        with patch('scanner.feedclient.fetch_json', side_effect=ValueError('Feed exceeds response size limit')), self.assertRaises(ValueError):
             scanner.fetch_remoteok()
         for adapter in (scanner.fetch_remoteok, scanner.fetch_jobicy, scanner.fetch_unstop_opportunities):
-            with patch('scanner.urllib.request.urlopen', side_effect=TimeoutError('offline')), self.assertRaises(TimeoutError):
+            with patch('scanner.feedclient.fetch_json', side_effect=TimeoutError('offline')), self.assertRaises(TimeoutError):
                 adapter()
 
     def test_malformed_feed_raises(self):
@@ -111,7 +107,7 @@ class ScannerTests(unittest.TestCase):
                 adapter()
 
     def test_verify_url_does_not_fetch_arbitrary_urls(self):
-        with patch('scanner.urllib.request.urlopen', side_effect=TimeoutError('offline')) as request:
+        with patch('scanner.feedclient.fetch_json', side_effect=TimeoutError('offline')) as request:
             self.assertEqual(scanner.verify_url('https://example.org')[0], None)
             self.assertEqual(scanner.verify_url('javascript:alert(1)')[0], False)
             request.assert_not_called()
@@ -119,7 +115,7 @@ class ScannerTests(unittest.TestCase):
     def test_scan_partial_and_source_records(self):
         fake_db = MagicMock()
         fake_db.get_all_active_opportunities.return_value = [{}, {}]
-        with patch.object(scanner, 'db', fake_db), patch.object(scanner, 'fetch_remoteok', side_effect=TimeoutError('offline')), patch.object(scanner, 'fetch_jobicy', return_value=[{'id': 'j'}]), patch.object(scanner, 'fetch_unstop_opportunities', return_value=[{'id': 'u'}]):
+        with patch.object(scanner, 'db', fake_db), patch.object(scanner, 'fetch_remoteok', side_effect=TimeoutError('offline')), patch.object(scanner, 'fetch_jobicy', return_value=[{'id': 'j', 'title':'Data Analyst', 'organization':'Example'}]), patch.object(scanner, 'fetch_unstop_opportunities', return_value=[{'id': 'u', 'title':'Case Competition', 'organization':'Example'}]):
             result = scanner.run_full_scan()
         self.assertEqual(result['status'], 'partial')
         self.assertEqual(result['counts'], {'RemoteOK': 0, 'Jobicy': 1, 'Unstop': 1})

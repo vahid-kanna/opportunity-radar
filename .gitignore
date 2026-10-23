@@ -3,3 +3,14 @@ __pycache__/
 *.pyo
 .venv/
 .env
+# Operator/runtime state is never part of source deployments.
+*.db
+*.db-*
+*.sqlite3
+*.sqlite3-*
+*.pre-v2.bak
+reviews.local.json
+boards.local.json
+profile.local.json
+.hermes/
+preview.html

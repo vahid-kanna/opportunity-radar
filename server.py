@@ -2,7 +2,7 @@ import os
 import sys
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from flask import Flask, render_template, jsonify, request
 import db
 import scanner
@@ -86,7 +86,34 @@ def manual_scan():
 @app.route("/health")
 def health():
     db.init_db()
-    return jsonify(status='healthy', version='2.0', service='opportunity-radar', sources=db.get_scanner_health(), timestamp=datetime.now().isoformat())
+    sources = db.get_scanner_health()
+    now = datetime.now(timezone.utc)
+    from quality import parse_date
+    stale_after = SCAN_INTERVAL_SECONDS * 3
+    source_state = 'current'
+    for source in sources:
+        seen = parse_date(source.get('last_success'))
+        if source.get('status') in ('error', 'partial'):
+            source_state = 'degraded'
+            break
+        if not seen or (now - seen).total_seconds() > stale_after:
+            source_state = 'stale'
+    # Liveness stays 200; discovery health is separate and never implied by HTTP uptime.
+    return jsonify(status='healthy', discovery_status=source_state, version='2.1', service='opportunity-radar', sources=sources, timestamp=now.isoformat())
+
+@app.route("/ready")
+def readiness():
+    # External monitors can distinguish process uptime from usable discovery.
+    db.init_db()
+    from quality import parse_date
+    now = datetime.now(timezone.utc)
+    sources = db.get_scanner_health()
+    recent = [s for s in sources if s.get('status') == 'success' and parse_date(s.get('last_success')) and
+              0 <= (now - parse_date(s['last_success'])).total_seconds() <= SCAN_INTERVAL_SECONDS * 3]
+    ready = bool(recent)
+    complete = len(recent) == len(sources)
+    return jsonify(status='ready' if complete else 'degraded' if ready else 'unready',
+                   recent_sources=len(recent), configured_sources=len(sources)), 200 if ready else 503
 
 if __name__ == "__main__":
     db.init_db()
