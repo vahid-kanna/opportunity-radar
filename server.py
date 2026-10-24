@@ -3,6 +3,21 @@ import sys
 import threading
 import time
 from datetime import datetime, timezone
+from pathlib import Path
+
+# Botkeep delivers Environment via .env — load it without adding a dependency.
+try:
+    for _line in Path(__file__).with_name('.env').read_text(encoding='utf-8').splitlines():
+        _line = _line.strip()
+        if not _line or _line.startswith('#') or '=' not in _line:
+            continue
+        _k, _v = _line.split('=', 1)
+        _k, _v = _k.strip(), _v.strip().strip('"').strip("'")
+        if _k and _k not in os.environ and _v:
+            os.environ[_k] = _v
+except FileNotFoundError:
+    pass
+
 from flask import Flask, render_template, jsonify, request
 import db
 import scanner
